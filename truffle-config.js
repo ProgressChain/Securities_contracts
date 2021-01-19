@@ -15,6 +15,7 @@ module.exports = {
       network_id: networkId,
       gas: gasLimit,
       gasPrice: gasPrice,
+      skipDryRun: true,
     },
     kovan: {
       network_id: "42",
@@ -27,6 +28,7 @@ module.exports = {
       gas: 6900000,
       from: account,
       timeoutBlocks: 500,
+      skipDryRun: true,
     },
     main: {
       network_id: "1",
@@ -35,10 +37,11 @@ module.exports = {
           deployKey,
           "https://mainnet.infura.io/v3/04c5f76635f24c70b28488be34dbd838"
         ),
-      gasPrice: 50000000000, // 10 gwei
+      gasPrice: 80000000000, // 10 gwei
       gas: 6900000,
       from: account,
       timeoutBlocks: 500,
+      skipDryRun: true,
     },
   },
 

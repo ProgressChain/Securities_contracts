@@ -5,7 +5,7 @@
 When using functions, all return numeric values (like `balances`, `totalSupply`, `allowances`) must
 be divided by `10^18` to get the value that should be.
 
-When usnig function `stockSplit(_x, _y)` and `reverseStockSplit(_x, _y)`, you need to choose power
+When using function `splitOrMerge(_x, _y)`, you need to choose power
 to multiply and use it every time you need to call this functions. `_x` and `_y` must be multiplied
 on `10^power` every time. Power must be the same as with the first call to one of the functions.
 Otherwise, a calculation error will occur and it will be impossible to fix without contract

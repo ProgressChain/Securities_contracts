@@ -30,9 +30,9 @@
             "gasLimit": 6500000
         },
         "deploy": {
-            "key": "efbf16ae0ad6d6688cbb7ff0aebbcc3472d89ddef3d18751f8e6ab8eec065071",
-            "account": "0x706325aF148CCaa6BCdf7ce5C646B6acf4359896",
-            "etherscanApiKey": "FQX6RFSGX1A93JQQQI6DN3FZWI2YBX8JRI"
+            "key": "",
+            "account": "",
+            "etherscanApiKey": ""
         }
     }
 }

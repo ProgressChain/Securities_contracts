@@ -37,16 +37,20 @@ contract STBXToken is IERC20, Roles {
 
     uint8 private _decimals;
 
+    bool public _isDisabledWitelist;
+
     EnumerableSet.AddressSet private _whitelist;
     EnumerableSet.AddressSet private _frozenlist;
 
     // Modifiers
 
     modifier onlyWhitelisted(address _account) {
-        require(
-            _whitelist.contains(_account),
-            "STBX: not whitelisted address."
-        );
+        if (_isDisabledWitelist) {
+            require(
+                _whitelist.contains(_account),
+                "STBX: not whitelisted address."
+            );
+        }
         _;
     }
 
@@ -61,31 +65,33 @@ contract STBXToken is IERC20, Roles {
     /**
      * @notice STBXToken simply implements a ERC20 token.
      */
-    constructor ()
-        Roles(msg.sender)
-        public
-    {
-        _name = "Stobox Demo Common Stock";
-        _symbol = "SDCS1";
+    constructor() public Roles(msg.sender) {
+        _name = "Stobox Demo Token";
+        _symbol = "SDCS7";
         _decimals = 0;
         _kDecimals = 18;
-        _k = 10 ** _kDecimals;
-        _defaultTransferLimit = 1000;
+        _k = 10**_kDecimals;
+        _defaultTransferLimit = 0;
 
-        _mint(msg.sender, 1000000);
+        _mint(msg.sender, 10000000);
         _whitelist.add(msg.sender);
     }
 
     // External functions
 
-     /**
+    /**
+     * @notice Enable or disable the whitelist.
+     * @param _value Flag that enables or disables the whitelist.
+     */
+    function toggleOpenWhitelist(bool _value) external onlySuperAdmin {
+        _isDisabledWitelist = _value;
+    }
+
+    /**
      * @notice Add an address to the whitelist.
      * @param _address Address to add to the whitelist.
      */
-    function addAddressToWhitelist(address _address)
-        external
-        onlyWhitelister
-    {
+    function addAddressToWhitelist(address _address) external onlyWhitelister {
         _whitelist.add(_address);
         _frozenlist.remove(_address);
     }
@@ -106,10 +112,7 @@ contract STBXToken is IERC20, Roles {
      * @notice Freeze all funds at the address.
      * @param _account Account at which to freeze funds.
      */
-    function freezeFunds(address _account)
-        external
-        onlyFreezer
-    {
+    function freezeFunds(address _account) external onlyFreezer {
         _frozenlist.add(_account);
     }
 
@@ -117,10 +120,7 @@ contract STBXToken is IERC20, Roles {
      * @notice Unfreeze all funds at the address.
      * @param _account Account at which to unfreeze funds.
      */
-    function unfreezeFunds(address _account)
-        external
-        onlyFreezer
-    {
+    function unfreezeFunds(address _account) external onlyFreezer {
         _frozenlist.remove(_account);
     }
 
@@ -146,10 +146,7 @@ contract STBXToken is IERC20, Roles {
      *
      * - balance of `_account` must be grater or equal than `_amount`.
      */
-    function burn(address _account, uint256 _amount)
-        external
-        onlySuperAdmin
-    {
+    function burn(address _account, uint256 _amount) external onlySuperAdmin {
         require(balanceOf(_account) >= _amount, "STBX: balance too low");
         _burn(_account, _getNormilizedValue(_amount));
     }
@@ -164,12 +161,11 @@ contract STBXToken is IERC20, Roles {
      *
      * - balance of `_from` must be greater or equal to `_amount`.
      */
-    function transferFunds(address _from, address _where, uint256 _amount)
-        external
-        onlyTransporter
-        onlyWhitelisted(_where)
-        returns (bool)
-    {
+    function transferFunds(
+        address _from,
+        address _where,
+        uint256 _amount
+    ) external onlyTransporter onlyWhitelisted(_where) returns (bool) {
         require(balanceOf(_from) >= _amount, "STBX: not enough tokens");
 
         _transfer(_from, _where, _getNormilizedValue(_amount));
@@ -188,10 +184,7 @@ contract STBXToken is IERC20, Roles {
      * - `_x` must not be equal to `_y`.
      * - `_x` and `_y` must be greater than 0.
      */
-    function splitOrMerge(uint256 _x, uint256 _y)
-        external
-        onlySuperAdmin
-    {
+    function splitOrMerge(uint256 _x, uint256 _y) external onlySuperAdmin {
         require(_x != _y, "STBX: _x must not be equal to _y");
         require(_x > 0, "STBX: _x must be greater than 0");
         require(_y > 0, "STBX: _y must be greater than 0");
@@ -210,7 +203,7 @@ contract STBXToken is IERC20, Roles {
     {
         _transferLimits[_account].transferLimit = _transferLimit;
         _transferLimits[_account].allowedToTransfer = _transferLimit;
-        _transferLimits[_account].lastTransferLimitTimestamp = now;
+        _transferLimits[_account].lastTransferLimitTimestamp = block.timestamp;
     }
 
     // External view functions
@@ -233,12 +226,16 @@ contract STBXToken is IERC20, Roles {
      * @param _account Address to check.
      * @return Is the funds are frozen.
      */
-    function isFrozenFunds(address _account)
-        external
-        view
-        returns (bool)
-    {
+    function isFrozenFunds(address _account) external view returns (bool) {
         return _frozenlist.contains(_account);
+    }
+
+    /**
+     * @notice Get main coefficient.
+     * @return Coefficient.
+     */
+    function getK() external view returns (uint256) {
+        return _k;
     }
 
     // Public functions
@@ -246,46 +243,29 @@ contract STBXToken is IERC20, Roles {
     /**
      * @notice Returns the name of the token.
      */
-    function name()
-        public
-        view
-        returns (string memory)
-    {
+    function name() public view returns (string memory) {
         return _name;
     }
 
     /**
      * @notice Returns the symbol of the token.
      */
-    function symbol()
-        public
-        view
-        returns (string memory)
-    {
+    function symbol() public view returns (string memory) {
         return _symbol;
     }
 
     /**
      * @notice Returns the number of decimals used to get its user representation.
      */
-    function decimals()
-        public
-        view
-        returns (uint8)
-    {
+    function decimals() public view returns (uint8) {
         return _decimals;
     }
 
     /**
      * @notice Returns the amount of tokens in existence.
      */
-    function totalSupply()
-        public
-        view
-        override
-        returns (uint256)
-    {
-        return _totalSupply.mul(_k).div(10 ** _kDecimals);
+    function totalSupply() public view override returns (uint256) {
+        return _totalSupply.mul(_k).div(10**_kDecimals);
     }
 
     /**
@@ -298,7 +278,7 @@ contract STBXToken is IERC20, Roles {
         override
         returns (uint256)
     {
-        return _balances[_account].mul(_k).div(10 ** _kDecimals);
+        return _balances[_account].mul(_k).div(10**_kDecimals);
     }
 
     /**
@@ -306,11 +286,7 @@ contract STBXToken is IERC20, Roles {
      * Can be defaul value or personally assigned to the `_account` value.
      * @param _account Account to get transfer limit.
      */
-    function getTransferLimit(address _account)
-        public
-        view
-        returns (uint256)
-    {
+    function getTransferLimit(address _account) public view returns (uint256) {
         if (_transferLimits[_account].transferLimit > 0) {
             return _transferLimits[_account].transferLimit;
         }
@@ -369,7 +345,7 @@ contract STBXToken is IERC20, Roles {
         override
         returns (uint256)
     {
-        return _allowances[_owner][_spender].mul(_k);
+        return _allowances[_owner][_spender].mul(_k).div(10**_kDecimals);
     }
 
     /**
@@ -407,7 +383,11 @@ contract STBXToken is IERC20, Roles {
      *
      * - `_amount` must be less or equal allowance for the `_sender`.
      */
-    function transferFrom(address _sender, address _recipient, uint256 _amount)
+    function transferFrom(
+        address _sender,
+        address _recipient,
+        uint256 _amount
+    )
         public
         virtual
         override
@@ -418,10 +398,14 @@ contract STBXToken is IERC20, Roles {
     {
         _updateTransferLimit(_sender, _amount);
         _transfer(_sender, _recipient, _getNormilizedValue(_amount));
-        _approve(_sender, msg.sender, _allowances[_sender][msg.sender].sub(
-            _getNormilizedValue(_amount),
-            "STBX: transfer amount exceeds allowance"
-        ));
+        _approve(
+            _sender,
+            msg.sender,
+            _allowances[_sender][msg.sender].sub(
+                _getNormilizedValue(_amount),
+                "STBX: transfer amount exceeds allowance"
+            )
+        );
 
         return true;
     }
@@ -440,9 +424,13 @@ contract STBXToken is IERC20, Roles {
         onlyWithUnfrozenFunds(msg.sender)
         returns (bool)
     {
-        _approve(msg.sender, _spender, _allowances[msg.sender][_spender].add(
-            _getNormilizedValue(_addedValue)
-        ));
+        _approve(
+            msg.sender,
+            _spender,
+            _allowances[msg.sender][_spender].add(
+                _getNormilizedValue(_addedValue)
+            )
+        );
 
         return true;
     }
@@ -465,17 +453,21 @@ contract STBXToken is IERC20, Roles {
         onlyWithUnfrozenFunds(msg.sender)
         returns (bool)
     {
-        _approve(msg.sender, _spender, _allowances[msg.sender][_spender].sub(
-            _getNormilizedValue(_subtractedValue),
-            "STBX: decreased allowance below zero"
-        ));
+        _approve(
+            msg.sender,
+            _spender,
+            _allowances[msg.sender][_spender].sub(
+                _getNormilizedValue(_subtractedValue),
+                "STBX: decreased allowance below zero"
+            )
+        );
 
         return true;
     }
 
     // Internal functions
 
-     /**
+    /**
      * @notice Moves tokens `_amount` from `_sender` to `_recipient`.
      * Emits a {Transfer} event.
      * @param _sender Sender of tokens.
@@ -488,15 +480,13 @@ contract STBXToken is IERC20, Roles {
      * - `_recipient` cannot be the zero address.
      * - `_sender` must have a balance of at least `_amount`.
      */
-    function _transfer(address _sender, address _recipient, uint256 _amount)
-        internal
-        virtual
-    {
+    function _transfer(
+        address _sender,
+        address _recipient,
+        uint256 _amount
+    ) internal virtual {
         require(_sender != address(0), "STBX: transfer from the zero address");
-        require(
-            _recipient != address(0),
-            "STBX: transfer to the zero address"
-        );
+        require(_recipient != address(0), "STBX: transfer to the zero address");
 
         _beforeTokenTransfer(_sender, _recipient, _amount);
 
@@ -519,10 +509,7 @@ contract STBXToken is IERC20, Roles {
      *
      * - `_account` cannot be the zero address.
      */
-    function _mint(address _account, uint256 _amount)
-        internal
-        virtual
-    {
+    function _mint(address _account, uint256 _amount) internal virtual {
         require(_account != address(0), "STBX: mint to the zero address");
 
         _beforeTokenTransfer(address(0), _account, _amount);
@@ -545,10 +532,7 @@ contract STBXToken is IERC20, Roles {
      * - `_account` cannot be the zero address.
      * - `_amount` must have at least `amount` tokens.
      */
-    function _burn(address _account, uint256 _amount)
-        internal
-        virtual
-    {
+    function _burn(address _account, uint256 _amount) internal virtual {
         require(_account != address(0), "STBX: burn from the zero address");
 
         _beforeTokenTransfer(_account, address(0), _amount);
@@ -574,10 +558,11 @@ contract STBXToken is IERC20, Roles {
      * - `_owner` cannot be the zero address.
      * - `_spender` cannot be the zero address.
      */
-    function _approve(address _owner, address _spender, uint256 _amount)
-        internal
-        virtual
-    {
+    function _approve(
+        address _owner,
+        address _spender,
+        uint256 _amount
+    ) internal virtual {
         require(_owner != address(0), "STBX: approve from the zero address");
         require(_spender != address(0), "STBX: approve to the zero address");
 
@@ -601,10 +586,11 @@ contract STBXToken is IERC20, Roles {
      * - when `_to` is zero, `_amount` of ``_from``'s tokens will be burned.
      * - `_from` and `_to` are never both zero.
      */
-    function _beforeTokenTransfer(address _from, address _to, uint256 _amount)
-        internal
-        virtual
-    { }
+    function _beforeTokenTransfer(
+        address _from,
+        address _to,
+        uint256 _amount
+    ) internal virtual {}
 
     // Private functions
 
@@ -613,11 +599,9 @@ contract STBXToken is IERC20, Roles {
      * @param _x First coefficient.
      * @param _y Second coefficient.
      */
-    function _split(uint256 _x, uint256 _y)
-        private
-    {
-        _k = _k.mul(_y.mul(10 ** _kDecimals).div(_x));
-        _k = _k.div(10 ** 18);
+    function _split(uint256 _x, uint256 _y) private {
+        _k = _k.mul(_y.mul(10**_kDecimals).div(_x));
+        _k = _k.div(10**18);
     }
 
     /**
@@ -627,9 +611,10 @@ contract STBXToken is IERC20, Roles {
      */
     function _getNormilizedValue(uint256 _value)
         private
+        view
         returns (uint256)
     {
-        return _value.div(_k.div(10 ** _kDecimals));
+        return _value.mul(10**_kDecimals).div(_k);
     }
 
     /**
@@ -638,26 +623,27 @@ contract STBXToken is IERC20, Roles {
      * @param _account Account to update transfer limit if needed.
      * @param _amount Amount to substruct from transfer limit after updating.
      */
-    function _updateTransferLimit(address _account, uint256 _amount)
-        private
-    {
-        if (_transferLimits[_account].lastTransferLimitTimestamp + 1 days < now) {
-            _transferLimits[_account].lastTransferLimitTimestamp = now;
+    function _updateTransferLimit(address _account, uint256 _amount) private {
+        if (
+            _transferLimits[_account].lastTransferLimitTimestamp + 1 days <
+            block.timestamp
+        ) {
+            _transferLimits[_account].lastTransferLimitTimestamp = block
+                .timestamp;
 
             if (_transferLimits[_account].transferLimit > 0) {
-                _transferLimits[_account].allowedToTransfer =
-                    _transferLimits[_account].transferLimit;
-            }
-            else {
-                _transferLimits[_account].allowedToTransfer = _defaultTransferLimit;
+                _transferLimits[_account].allowedToTransfer = _transferLimits[
+                    _account
+                ]
+                    .transferLimit;
+            } else {
+                _transferLimits[_account]
+                    .allowedToTransfer = _defaultTransferLimit;
             }
         }
 
-        _transferLimits[_account].allowedToTransfer =
-            _transferLimits[_account].allowedToTransfer.sub(
-                _amount,
-                "STBX: transfer exceeds your transfer limit"
-            );
+        _transferLimits[_account].allowedToTransfer = _transferLimits[_account]
+            .allowedToTransfer
+            .sub(_amount, "STBX: transfer exceeds your transfer limit");
     }
-
 }
