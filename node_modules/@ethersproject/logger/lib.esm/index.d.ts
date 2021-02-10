@@ -46,4 +46,6 @@ export declare class Logger {
     static globalLogger(): Logger;
     static setCensorship(censorship: boolean, permanent?: boolean): void;
     static setLogLevel(logLevel: LogLevel): void;
+    static from(version: string): Logger;
 }
+//# sourceMappingURL=index.d.ts.map

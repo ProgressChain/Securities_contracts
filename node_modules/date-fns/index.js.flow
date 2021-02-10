@@ -579,6 +579,8 @@ declare module.exports: {
 
   max: (datesArray: (Date | number)[]) => Date,
 
+  milliseconds: (duration: Duration) => number,
+
   min: (datesArray: (Date | number)[]) => Date,
 
   parse: (

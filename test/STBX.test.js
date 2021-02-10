@@ -1,5 +1,7 @@
 require("truffle-test-utils").init();
 
+const { time } = require("@openzeppelin/test-helpers");
+
 const STBXToken = artifacts.require("STBXToken");
 const utils = require("./helpers/utils");
 
@@ -53,8 +55,13 @@ contract("STBXToken", (accounts) => {
 
   it("freezing of funds", async () => {
     await contractInstance.addWhitelister(superadmin, { from: superadmin });
+    await contractInstance.addLimiter(superadmin, { from: superadmin });
     await contractInstance.addAddressToWhitelist(bob, { from: superadmin });
     await contractInstance.addAddressToWhitelist(alice, { from: superadmin });
+    await contractInstance.setTransferLimit(superadmin, 1000, {
+      from: superadmin,
+    });
+    await contractInstance.setTransferLimit(bob, 1000, { from: superadmin });
     await contractInstance.transfer(bob, 1000, { from: superadmin });
     await contractInstance.transfer(alice, 100, { from: bob });
     await contractInstance.addFreezer(alice, { from: superadmin });
@@ -335,7 +342,7 @@ contract("STBXToken", (accounts) => {
     limit = await contractInstance.getTransferLimit(superadmin, {
       from: superadmin,
     });
-    assert.equal(limit, 1000);
+    assert.equal(limit, 0);
 
     allowedToTransfer = await contractInstance.getAllowedToTransfer(
       superadmin,
@@ -343,6 +350,9 @@ contract("STBXToken", (accounts) => {
     );
     assert.equal(allowedToTransfer, 0);
 
+    await contractInstance.setTransferLimit(superadmin, 1000, {
+      from: superadmin,
+    });
     await contractInstance.transfer(bob, 500, { from: superadmin });
 
     allowedToTransfer = await contractInstance.getAllowedToTransfer(
@@ -352,7 +362,7 @@ contract("STBXToken", (accounts) => {
     assert.equal(allowedToTransfer, 500);
 
     limit = await contractInstance.getTransferLimit(bob, { from: bob });
-    assert.equal(limit, 1000);
+    assert.equal(limit, 0);
 
     await utils.shouldThrow(
       contractInstance.setTransferLimit(bob, 500, { from: bob })
@@ -463,5 +473,111 @@ contract("STBXToken", (accounts) => {
     await utils.shouldThrow(
       contractInstance.transfer(bob, 10000, { from: superadmin })
     );
+  });
+
+  it("check transfer count limitation functionality", async () => {
+    let count;
+
+    await contractInstance.addLimiter(superadmin, { from: superadmin });
+    await contractInstance.setTransferLimit(superadmin, 1000, {
+      from: superadmin,
+    });
+    await contractInstance.setTransferLimit(bob, 1000, {
+      from: superadmin,
+    });
+    await contractInstance.toggleOpenTransactionCount(true, {
+      from: superadmin,
+    });
+    await utils.shouldThrow(
+      contractInstance.transfer(bob, 1000, { from: superadmin })
+    );
+    await utils.shouldThrow(
+      contractInstance.setTransactionCountLimit(superadmin, 5, { from: bob })
+    );
+    await contractInstance.setTransactionCountLimit(superadmin, 4, {
+      from: superadmin,
+    });
+    await contractInstance.setTransactionCountLimit(bob, 3, {
+      from: superadmin,
+    });
+
+    count = await contractInstance.getTransactionCountLimit(superadmin, {
+      from: superadmin,
+    });
+
+    assert.equal(count, 4);
+
+    count = await contractInstance.getTransactionCountLimit(bob, {
+      from: superadmin,
+    });
+
+    assert.equal(count, 3);
+
+    count = await contractInstance.getLeftTransactionCountLimit(superadmin, {
+      from: superadmin,
+    });
+
+    assert.equal(count, 4);
+
+    count = await contractInstance.getLeftTransactionCountLimit(bob, {
+      from: superadmin,
+    });
+
+    assert.equal(count, 3);
+
+    await contractInstance.transfer(bob, 500, { from: superadmin });
+    await contractInstance.transfer(superadmin, 500, { from: bob });
+
+    count = await contractInstance.getLeftTransactionCountLimit(superadmin, {
+      from: superadmin,
+    });
+
+    assert.equal(count, 2);
+
+    count = await contractInstance.getLeftTransactionCountLimit(bob, {
+      from: superadmin,
+    });
+
+    assert.equal(count, 1);
+
+    await contractInstance.transfer(bob, 500, { from: superadmin });
+
+    count = await contractInstance.getLeftTransactionCountLimit(superadmin, {
+      from: superadmin,
+    });
+
+    assert.equal(count, 1);
+
+    count = await contractInstance.getLeftTransactionCountLimit(bob, {
+      from: superadmin,
+    });
+
+    assert.equal(count, 0);
+
+    await utils.shouldThrow(
+      contractInstance.transfer(superadmin, 1, { from: bob })
+    );
+
+    await time.increase(60);
+
+    await utils.shouldThrow(
+      contractInstance.transfer(bob, 500, { from: superadmin })
+    );
+
+    await time.increase(86400);
+
+    await contractInstance.transfer(superadmin, 1, { from: bob });
+
+    count = await contractInstance.getLeftTransactionCountLimit(superadmin, {
+      from: superadmin,
+    });
+
+    assert.equal(count, 3);
+
+    count = await contractInstance.getLeftTransactionCountLimit(bob, {
+      from: superadmin,
+    });
+
+    assert.equal(count, 2);
   });
 });

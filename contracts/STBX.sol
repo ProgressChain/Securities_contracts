@@ -23,11 +23,19 @@ contract STBXToken is IERC20, Roles {
         uint256 allowedToTransfer;
     }
 
+    struct TransactionCountLimit {
+        uint256 transactionCountLimit;
+        uint256 lastTransactionCountLimitTimestamp;
+        uint256 leftTransactionCountLimit;
+    }
+
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
     mapping(address => TransferLimit) private _transferLimits;
+    mapping(address => TransactionCountLimit) private _transactionCountLimits;
 
     uint256 private _defaultTransferLimit;
+    uint256 private _defaultTransactionCountLimit;
     uint256 private _totalSupply;
     uint256 private _kDecimals;
     uint256 private _k;
@@ -38,6 +46,7 @@ contract STBXToken is IERC20, Roles {
     uint8 private _decimals;
 
     bool public _isDisabledWitelist;
+    bool public _isEnabledTransactionCount;
 
     EnumerableSet.AddressSet private _whitelist;
     EnumerableSet.AddressSet private _frozenlist;
@@ -67,11 +76,12 @@ contract STBXToken is IERC20, Roles {
      */
     constructor() public Roles(msg.sender) {
         _name = "Stobox Demo Token";
-        _symbol = "SDCS7";
+        _symbol = "SDCS9";
         _decimals = 0;
         _kDecimals = 18;
         _k = 10**_kDecimals;
         _defaultTransferLimit = 0;
+        _defaultTransactionCountLimit = 0;
 
         _mint(msg.sender, 10000000);
         _whitelist.add(msg.sender);
@@ -85,6 +95,14 @@ contract STBXToken is IERC20, Roles {
      */
     function toggleOpenWhitelist(bool _value) external onlySuperAdmin {
         _isDisabledWitelist = _value;
+    }
+
+    /**
+     * @notice Enable or disable the transactions limit.
+     * @param _value Flag that enables or disables the transactions limit.
+     */
+    function toggleOpenTransactionCount(bool _value) external onlySuperAdmin {
+        _isEnabledTransactionCount = _value;
     }
 
     /**
@@ -206,6 +224,23 @@ contract STBXToken is IERC20, Roles {
         _transferLimits[_account].lastTransferLimitTimestamp = block.timestamp;
     }
 
+    /**
+     * @notice Set transaction count limit for address.
+     * @param _account Address where to set transaction count limit.
+     * @param _transactionCountLimit Daily transfer limit for an `_account`.
+     */
+    function setTransactionCountLimit(
+        address _account,
+        uint256 _transactionCountLimit
+    ) external onlyLimiter {
+        _transactionCountLimits[_account]
+            .transactionCountLimit = _transactionCountLimit;
+        _transactionCountLimits[_account]
+            .leftTransactionCountLimit = _transactionCountLimit;
+        _transactionCountLimits[_account]
+            .lastTransactionCountLimitTimestamp = block.timestamp;
+    }
+
     // External view functions
 
     /**
@@ -310,6 +345,38 @@ contract STBXToken is IERC20, Roles {
     }
 
     /**
+     * @notice Returns transaction count limit for `_account`.
+     * Can be default value or personally assigned to the `_account` value.
+     * @param _account Account to get transfer limit.
+     */
+    function getTransactionCountLimit(address _account)
+        public
+        view
+        returns (uint256)
+    {
+        if (_transactionCountLimits[_account].transactionCountLimit > 0) {
+            return _transactionCountLimits[_account].transactionCountLimit;
+        }
+
+        return _defaultTransactionCountLimit;
+    }
+
+    /**
+     * @notice Get the number of transactions that can be transferred today
+     * by `_account`. Can be 0 in 2 cases:
+     * a) `_updateTransferLimit` function not called yet;
+     * b) transfer limit was set to 0 by limiter.
+     * @param _account Account to get amount allowed to transfer today.
+     */
+    function getLeftTransactionCountLimit(address _account)
+        public
+        view
+        returns (uint256)
+    {
+        return _transactionCountLimits[_account].leftTransactionCountLimit;
+    }
+
+    /**
      * @notice Moves `_amount` tokens from the caller's account to `_recipient`.
      * Emits a {Transfer} event.
      * @param _recipient Recipient of the tokens.
@@ -326,6 +393,8 @@ contract STBXToken is IERC20, Roles {
         returns (bool)
     {
         _updateTransferLimit(msg.sender, _amount);
+        _updateTransactionCountLimit(_recipient);
+        _updateTransactionCountLimit(msg.sender);
         _transfer(msg.sender, _recipient, _getNormilizedValue(_amount));
 
         return true;
@@ -397,6 +466,8 @@ contract STBXToken is IERC20, Roles {
         returns (bool)
     {
         _updateTransferLimit(_sender, _amount);
+        _updateTransactionCountLimit(_sender);
+        _updateTransactionCountLimit(_recipient);
         _transfer(_sender, _recipient, _getNormilizedValue(_amount));
         _approve(
             _sender,
@@ -645,5 +716,42 @@ contract STBXToken is IERC20, Roles {
         _transferLimits[_account].allowedToTransfer = _transferLimits[_account]
             .allowedToTransfer
             .sub(_amount, "STBX: transfer exceeds your transfer limit");
+    }
+
+    /**
+     * @notice Update transaction count limit for `_account` before each operation with
+     * tokens.
+     * @param _account Account to update transaction count limit if needed.
+     */
+    function _updateTransactionCountLimit(address _account) private {
+        if (_isEnabledTransactionCount) {
+            if (
+                _transactionCountLimits[_account]
+                    .lastTransactionCountLimitTimestamp +
+                    1 days <
+                block.timestamp
+            ) {
+                _transactionCountLimits[_account]
+                    .lastTransactionCountLimitTimestamp = block.timestamp;
+
+                if (
+                    _transactionCountLimits[_account].transactionCountLimit > 0
+                ) {
+                    _transactionCountLimits[_account]
+                        .leftTransactionCountLimit = _transactionCountLimits[
+                        _account
+                    ]
+                        .transactionCountLimit;
+                } else {
+                    _transactionCountLimits[_account]
+                        .leftTransactionCountLimit = _defaultTransactionCountLimit;
+                }
+            }
+
+            _transactionCountLimits[_account]
+                .leftTransactionCountLimit = _transactionCountLimits[_account]
+                .leftTransactionCountLimit
+                .sub(1, "STBX: transfer exceeds your transaction count limit");
+        }
     }
 }
