@@ -76,7 +76,7 @@ contract STBXToken is IERC20, Roles {
      */
     constructor() public Roles(msg.sender) {
         _name = "Stobox Demo Token";
-        _symbol = "SDCS9";
+        _symbol = "SDCS10";
         _decimals = 0;
         _kDecimals = 18;
         _k = 10**_kDecimals;
@@ -202,6 +202,7 @@ contract STBXToken is IERC20, Roles {
      * - `_x` must not be equal to `_y`.
      * - `_x` and `_y` must be greater than 0.
      */
+      /**
     function splitOrMerge(uint256 _x, uint256 _y) external onlySuperAdmin {
         require(_x != _y, "STBX: _x must not be equal to _y");
         require(_x > 0, "STBX: _x must be greater than 0");
@@ -209,6 +210,7 @@ contract STBXToken is IERC20, Roles {
 
         _split(_x, _y);
     }
+    */
 
     /**
      * @notice Set transfer limit for address.
